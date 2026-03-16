@@ -12,3 +12,4 @@ splash_screen_sd=pkg:/images/splash_screen_sd.png
 ui_resolutions=hd,fhd
 supported_resolutions=1080p,720p
 bs_const=ROKU_SLOW_DNS=true
+
