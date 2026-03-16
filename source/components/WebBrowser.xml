@@ -1,0 +1,17 @@
+<component name="WebBrowser">
+    <interface>
+        <field id="url" type="string" required="true" description="The URL of the webpage to load." />
+        <field id="title" type="string" description="The title of the webpage." />
+    </interface>
+    <script>
+        function loadPage() {
+            // Code to load the webpage from the URL
+        }
+
+        function playVideo(videoUrl) {
+            // Code to manage video playback
+        }
+
+        // Other functionalities here
+    </script>
+</component>
