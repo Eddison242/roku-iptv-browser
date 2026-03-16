@@ -47,3 +47,5 @@
 1. Fork the repository.
 2. Create a new branch for your feature.
 3. Make your changes and submit a pull request.
+
+![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/Eddison242/roku-iptv-browser?utm_source=oss&utm_medium=github&utm_campaign=Eddison242%2Froku-iptv-browser&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
