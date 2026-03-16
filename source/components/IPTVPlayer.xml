@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component name="IPTVPlayer">
+    <script>
+        <![CDATA[
+            // Functionality for HLS and M3U playlist parsing
+            function parseM3U(playlist) {
+                const lines = playlist.split('\n');
+                const streams = [];
+                let currentStream = {};
+
+                for (const line of lines) {
+                    if (line.startsWith('#EXTINF:')) {
+                        if (currentStream.url) {
+                            streams.push(currentStream);
+                        }
+                        currentStream = { 
+                            title: line.split(',')[1].trim(),
+                        };
+                    } else if (line.trim() && !line.startsWith('#')) {
+                        currentStream.url = line.trim();
+                    }
+                }
+                if (currentStream.url) {
+                    streams.push(currentStream);
+                }
+                return streams;
+            }
+
+            // HLS playback functionality
+            function playStream(url) {
+                // Implement HLS playback logic (using a library or native implementations)
+                console.log('Playing stream: ' + url);
+            }
+
+            // Example usage
+            const m3uData = `#EXTM3U\n#EXTINF:0,Sample Stream\nhttp://example.com/sample.m3u8`;
+            const parsedStreams = parseM3U(m3uData);
+            parsedStreams.forEach(stream => {
+                playStream(stream.url);
+            });
+        ]]>
+    </script>
+</component>
