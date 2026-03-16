@@ -1,0 +1,23 @@
+<SettingsPanel>
+    <PlaylistManagement>
+        <Option name="Add Playlist" />
+        <Option name="Remove Playlist" />
+        <Option name="Edit Playlist" />
+    </PlaylistManagement>
+    <VideoQuality>
+        <Option name="Quality" values="Low, Medium, High" />
+    </VideoQuality>
+    <NetworkSettings>
+        <Option name="WiFi" />
+        <Option name="Ethernet" />
+        <Option name="Proxy" />
+    </NetworkSettings>
+    <BookmarksManagement>
+        <Option name="Add Bookmark" />
+        <Option name="Remove Bookmark" />
+    </BookmarksManagement>
+    <AppPreferences>
+        <Option name="Theme" values="Light, Dark" />
+        <Option name="Notifications" values="On, Off" />
+    </AppPreferences>
+</SettingsPanel>
