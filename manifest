@@ -1,7 +1,7 @@
 title=IPTV Player & Web Browser
 major_version=1
 minor_version=0
-build=1
+build_version=1
 mm_icon_focus_hd=pkg:/images/mm_icon_focus_hd.png
 mm_icon_focus_sd=pkg:/images/mm_icon_focus_sd.png
 mm_icon_unfocus_hd=pkg:/images/mm_icon_unfocus_hd.png
