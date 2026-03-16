@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component name="MainScene" extends="Scene">
+  <interface>
+    <field id="currentMode" type="string" value="menu" alwaysNotify="true"/>
+  </interface>
+  
+  <children>
+    <!-- Main Menu -->
+    <Rectangle id="backgroundRect" width="1920" height="1080" color="0x1a1a1aff"/>
+    
+    <!-- Menu Buttons -->
+    <Group id="menuGroup" translation="[100, 100]">
+      <Label id="titleLabel" text="IPTV Player & Web Browser" 
+             font="font:LargeSystemFont" color="0xffffffff"/>
+      
+      <Group id="buttonGroup" translation="[0, 100]">
+        <Button id="iptvButton" text="IPTV Player" 
+                width="400" height="80" translation="[0, 0]"/>
+        <Button id="browserButton" text="Web Browser" 
+                width="400" height="80" translation="[0, 100]"/>
+        <Button id="settingsButton" text="Settings" 
+                width="400" height="80" translation="[0, 200]"/>
+      </Group>
+    </Group>
+    
+    <!-- IPTV Player Component -->
+    <Group id="iptvContainer" visible="false">
+      <IPTVPlayer id="iptvPlayer" width="1920" height="1080"/>
+    </Group>
+    
+    <!-- Web Browser Component -->
+    <Group id="browserContainer" visible="false">
+      <WebBrowser id="webBrowser" width="1920" height="1080"/>
+    </Group>
+    
+    <!-- Settings Component -->
+    <Group id="settingsContainer" visible="false">
+      <SettingsPanel id="settingsPanel" width="1920" height="1080"/>
+    </Group>
+  </children>
+  
+  <script type="text/brightscript">
+    <![CDATA[
+      function init()
+        m.currentMode = m.top.findNode("currentMode")
+        m.iptvPlayer = m.top.findNode("iptvPlayer")
+        m.webBrowser = m.top.findNode("webBrowser")
+        m.settingsPanel = m.top.findNode("settingsPanel")
+        
+        m.menuGroup = m.top.findNode("menuGroup")
+        m.iptvContainer = m.top.findNode("iptvContainer")
+        m.browserContainer = m.top.findNode("browserContainer")
+        m.settingsContainer = m.top.findNode("settingsContainer")
+        
+        m.iptvButton = m.top.findNode("iptvButton")
+        m.browserButton = m.top.findNode("browserButton")
+        m.settingsButton = m.top.findNode("settingsButton")
+        
+        m.iptvButton.observeField("buttonSelected", m.port)
+        m.browserButton.observeField("buttonSelected", m.port)
+        m.settingsButton.observeField("buttonSelected", m.port)
+        
+        m.top.observeField("currentMode", m.port)
+        
+        m.currentMode.value = "menu"
+      end function
+      
+      function onKeyEvent(key as String, press as Boolean) as Boolean
+        if not press then return false
+        
+        if key = "back"
+          if m.currentMode.value <> "menu"
+            showMenu()
+            return true
+          end if
+        end if
+        
+        return false
+      end function
+      
+      function showMenu()
+        m.menuGroup.visible = true
+        m.iptvContainer.visible = false
+        m.browserContainer.visible = false
+        m.settingsContainer.visible = false
+        m.currentMode.value = "menu"
+      end function
+      
+      function showIPTV()
+        m.menuGroup.visible = false
+        m.iptvContainer.visible = true
+        m.browserContainer.visible = false
+        m.settingsContainer.visible = false
+        m.currentMode.value = "iptv"
+        m.iptvPlayer.setFocus(true)
+      end function
+      
+      function showBrowser()
+        m.menuGroup.visible = false
+        m.iptvContainer.visible = false
+        m.browserContainer.visible = true
+        m.settingsContainer.visible = false
+        m.currentMode.value = "browser"
+        m.webBrowser.setFocus(true)
+      end function
+      
+      function showSettings()
+        m.menuGroup.visible = false
+        m.iptvContainer.visible = false
+        m.browserContainer.visible = false
+        m.settingsContainer.visible = true
+        m.currentMode.value = "settings"
+      end function
+      
+      function onPortMessage() as void
+        msg = wait(0, m.port)
+        
+        if type(msg) = "roSGNodeEvent"
+          field = msg.getField()
+          
+          if field = "buttonSelected"
+            button = msg.getNode()
+            if button.id = "iptvButton"
+              showIPTV()
+            else if button.id = "browserButton"
+              showBrowser()
+            else if button.id = "settingsButton"
+              showSettings()
+            end if
+          end if
+        end if
+      end function
+    ]]>
+  </script>
+</component>
