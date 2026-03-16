@@ -1,0 +1,385 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component name="WebBrowser" extends="Group">
+  <interface>
+    <field id="currentUrl" type="string" alwaysNotify="true"/>
+    <field id="pageTitle" type="string" value="Web Browser"/>
+    <field id="isLoading" type="bool" value="false"/>
+  </interface>
+  
+  <children>
+    <Rectangle id="bgRect" width="1920" height="1080" color="0x1a1a1aff"/>
+    <Rectangle id="urlBarBg" width="1920" height="80" translation="[0, 0]" color="0x2a2a2aff"/>
+    <Label id="urlLabel" text="URL: " font="font:MediumSystemFont" color="0xffffffff" translation="[20, 15]"/>
+    <Label id="urlDisplay" text="Enter URL" font="font:SmallSystemFont" color="0xccccccff" translation="[80, 15]" width="1800"/>
+    <Label id="loadingLabel" text="Loading..." font="font:SmallSystemFont" color="0xffff00ff" translation="[1800, 15]" visible="false"/>
+    <Rectangle id="contentBg" width="1920" height="920" translation="[0, 80]" color="0x0a0a0aff"/>
+    <Video id="videoPlayer" width="1920" height="920" translation="[0, 80]" showControls="true" visible="false"/>
+    <Label id="contentLabel" text="Web browser ready. Enter a video URL to play." font="font:MediumSystemFont" color="0xffffffff" translation="[100, 400]" width="1720"/>
+    <ScrollingList id="bookmarksList" width="400" height="920" translation="[0, 80]" itemComponentName="BookmarkItem" visible="false"/>
+    <Rectangle id="controlBarBg" width="1920" height="60" translation="[0, 1020]" color="0x2a2a2aff"/>
+    <Label id="controlsInfo" text="OK: Play/Pause | UP/DOWN: Browse | LEFT: Bookmarks | RIGHT: URL Input | BACK: Menu" font="font:SmallSystemFont" color="0xccccccff" translation="[20, 1030]"/>
+  </children>
+  
+  <script type="text/brightscript">
+    <![CDATA[
+      function init()
+        m.currentUrl = m.top.findNode("currentUrl")
+        m.pageTitle = m.top.findNode("pageTitle")
+        m.isLoading = m.top.findNode("isLoading")
+        m.videoPlayer = m.top.findNode("videoPlayer")
+        m.contentLabel = m.top.findNode("contentLabel")
+        m.urlDisplay = m.top.findNode("urlDisplay")
+        m.loadingLabel = m.top.findNode("loadingLabel")
+        m.bookmarksList = m.top.findNode("bookmarksList")
+        m.bookmarks = []
+        m.history = []
+        m.currentInput = ""
+        m.showBookmarks = false
+        m.top.observeField("currentUrl", m.port)
+        m.videoPlayer.observeField("state", m.port)
+        loadBookmarks()
+        updateBookmarksList()
+      end function
+      
+      function onPortMessage() as void
+        msg = wait(0, m.port)
+        if type(msg) = "roSGNodeEvent"
+          field = msg.getField()
+          if field = "currentUrl"
+            loadContent(m.currentUrl.value)
+          else if field = "state" and msg.getNode().id = "videoPlayer"
+            handleVideoStateChange(m.videoPlayer.state)
+          end if
+        end if
+      end function
+      
+      function loadContent(url as String) as void
+        if url = "" then return
+        if not isValidUrl(url)
+          showError("Invalid URL format")
+          return
+        end if
+        m.isLoading.value = true
+        m.loadingLabel.visible = true
+        m.contentLabel.text = "Loading content..."
+        m.urlDisplay.text = url
+        if isVideoUrl(url)
+          playVideo(url)
+        else
+          fetchWebContent(url)
+        end if
+      end function
+      
+      function isValidUrl(url as String) as Boolean
+        return url.left(7) = "http://" or url.left(8) = "https://"
+      end function
+      
+      function isVideoUrl(url as String) as Boolean
+        videoExtensions = [".mp4", ".mkv", ".m3u8", ".mpd", ".webm", ".avi", ".mov"]
+        lowerUrl = lcase(url)
+        for each ext in videoExtensions
+          if lowerUrl.instr(ext) > 0
+            return true
+          end for
+        end for
+        streamingDomains = ["youtube.com", "vimeo.com", "dailymotion.com", "twitch.tv", "hulu.com"]
+        for each domain in streamingDomains
+          if lowerUrl.instr(domain) > 0
+            return true
+          end for
+        end for
+        return false
+      end function
+      
+      function playVideo(url as String) as void
+        m.videoPlayer.visible = true
+        m.contentLabel.visible = false
+        m.bookmarksList.visible = false
+        m.videoPlayer.content = createVideoContent(url)
+        m.videoPlayer.control = "play"
+        m.videoPlayer.setFocus(true)
+        addToHistory(url)
+        m.isLoading.value = false
+        m.loadingLabel.visible = false
+      end function
+      
+      function createVideoContent(url as String) as Object
+        content = createObject("roSGNode", "ContentNode")
+        content.url = url
+        content.title = m.pageTitle.value
+        content.streamFormat = "auto"
+        return content
+      end function
+      
+      function fetchWebContent(url as String) as void
+        http = createObject("roUrlTransfer")
+        http.setUrl(url)
+        http.setCertificatesFile("common:/certs/ca-bundle.crt")
+        http.initClientCertificates()
+        http.setConnectTimeout(10)
+        http.setReadTimeout(10)
+        http.addHeader("User-Agent", "Roku/9.0")
+        response = http.getToString()
+        if response <> invalid and response <> ""
+          videoSources = extractVideoSources(response, url)
+          if videoSources.count() > 0
+            playVideo(videoSources[0])
+          else
+            displayWebContent(response, url)
+          end if
+        else
+          showError("Failed to load content from URL")
+        end if
+        m.isLoading.value = false
+        m.loadingLabel.visible = false
+      end function
+      
+      function extractVideoSources(html as String, baseUrl as String) as Object
+        sources = []
+        videoStart = 0
+        while true
+          videoStart = html.instr(videoStart, "<video")
+          if videoStart = 0 then exit while
+          sourceStart = html.instr(videoStart, "<source")
+          if sourceStart > videoStart
+            hrefStart = html.instr(sourceStart, "src=")
+            if hrefStart > sourceStart
+              hrefStart += 5
+              quoteEnd = html.instr(hrefStart, """)
+              if quoteEnd > hrefStart
+                src = html.mid(hrefStart, quoteEnd - hrefStart)
+                if src <> "" and src.left(1) <> "<"
+                  sources.push(resolveUrl(src, baseUrl))
+                end if
+              end if
+            end if
+          end if
+          videoStart += 6
+        end while
+        iframeStart = 0
+        while true
+          iframeStart = html.instr(iframeStart, "<iframe")
+          if iframeStart = 0 then exit while
+          srcStart = html.instr(iframeStart, "src=")
+          if srcStart > iframeStart
+            srcStart += 5
+            quoteEnd = html.instr(srcStart, """)
+            if quoteEnd > srcStart
+              src = html.mid(srcStart, quoteEnd - srcStart)
+              if src <> "" and src.left(1) <> "<"
+                sources.push(resolveUrl(src, baseUrl))
+              end if
+            end if
+          end if
+          iframeStart += 7
+        end while
+        return sources
+      end function
+      
+      function resolveUrl(url as String, baseUrl as String) as String
+        if url.left(1) = "/"
+          baseUrlNoPath = baseUrl
+          protocolEnd = baseUrl.instr("://")
+          if protocolEnd > 0
+            slashPos = baseUrl.instr(protocolEnd + 3, "/")
+            if slashPos > 0
+              baseUrlNoPath = baseUrl.left(slashPos)
+            end if
+          end if
+          return baseUrlNoPath + url
+        else if url.left(4) <> "http"
+          baseUrlNoPath = baseUrl
+          lastSlash = baseUrl.instr(0, "/")
+          while true
+            nextSlash = baseUrl.instr(lastSlash + 1, "/")
+            if nextSlash = 0 then exit while
+            lastSlash = nextSlash
+          end while
+          return baseUrl.left(lastSlash) + url
+        end if
+        return url
+      end function
+      
+      function displayWebContent(html as String, url as String) as void
+        m.videoPlayer.visible = false
+        m.contentLabel.visible = true
+        m.bookmarksList.visible = false
+        titleStart = html.instr("<title>")
+        if titleStart > 0
+          titleStart += 7
+          titleEnd = html.instr(titleStart, "</title>")
+          if titleEnd > titleStart
+            m.pageTitle.value = html.mid(titleStart, titleEnd - titleStart)
+          end if
+        end if
+        text = stripHtmlTags(html)
+        text = text.left(500) + "..."
+        m.contentLabel.text = text
+        addToHistory(url)
+      end function
+      
+      function stripHtmlTags(html as String) as String
+        result = ""
+        inTag = false
+        for i = 0 to html.len() - 1
+          char = html.mid(i, 1)
+          if char = "<"
+            inTag = true
+          else if char = ">
+            inTag = false
+          else if not inTag
+            result = result + char
+          end if
+        end for
+        result = result.replace("&nbsp;", " ")
+        result = result.replace("&quot;", "\"")
+        result = result.replace("&amp;", "&")
+        return result
+      end function
+      
+      function addToHistory(url as String) as void
+        if m.history.count() > 0 and m.history[m.history.count() - 1] = url
+          return
+        end if
+        m.history.push(url)
+        if m.history.count() > 50
+          m.history.shift()
+        end if
+        saveHistory()
+      end function
+      
+      function saveHistory() as void
+        registry = createObject("roRegistry")
+        historyStr = ""
+        for each url in m.history
+          historyStr = historyStr + url + "|"
+        end for
+        registry.write("browser_history", historyStr)
+        registry.flush()
+      end function
+      
+      function loadHistory() as void
+        registry = createObject("roRegistry")
+        historyStr = registry.read("browser_history")
+        if historyStr <> invalid
+          m.history = historyStr.split("|")
+        end if
+      end function
+      
+      function addBookmark(url as String, title as String) as void
+        bookmark = {
+          url: url,
+          title: title
+        }
+        m.bookmarks.push(bookmark)
+        saveBookmarks()
+        updateBookmarksList()
+      end function
+      
+      function saveBookmarks() as void
+        registry = createObject("roRegistry")
+        bookmarkStr = ""
+        for each bookmark in m.bookmarks
+          bookmarkStr = bookmarkStr + bookmark.title +":::" + bookmark.url + "|"
+        end for
+        registry.write("bookmarks", bookmarkStr)
+        registry.flush()
+      end function
+      
+      function loadBookmarks() as void
+        registry = createObject("roRegistry")
+        bookmarkStr = registry.read("bookmarks")
+        if bookmarkStr <> invalid
+          items = bookmarkStr.split("|")
+          for each item in items
+            if item <> ""
+              parts = item.split(":::")
+              if parts.count() = 2
+                bookmark = {
+                  title: parts[0],
+                  url: parts[1]
+                }
+                m.bookmarks.push(bookmark)
+              end if
+            end if
+          end for
+        end if
+      end function
+      
+      function updateBookmarksList() as void
+        items = []
+        for each bookmark in m.bookmarks
+          item = {
+            title: bookmark.title,
+            description: bookmark.url
+          }
+          items.push(item)
+        end for
+        m.bookmarksList.content = createListContent(items)
+      end function
+      
+      function createListContent(items as Object) as Object
+        content = createObject("roSGNode", "ContentNode")
+        for each item in items
+          node = createObject("roSGNode", "ContentNode")
+          node.title = item.title
+          node.description = item.description
+          content.appendChild(node)
+        end for
+        return content
+      end function
+      
+      function handleVideoStateChange(state as String) as void
+        if state = "error"
+          showError("Video playback error")
+        else if state = "finished"
+          m.videoPlayer.visible = false
+          m.contentLabel.visible = true
+        end if
+      end function
+      
+      function showError(message as String) as void
+        m.contentLabel.text = "Error: " + message
+        m.contentLabel.visible = true
+        m.videoPlayer.visible = false
+        m.isLoading.value = false
+        m.loadingLabel.visible = false
+      end function
+      
+      function onKeyEvent(key as String, press as Boolean) as Boolean
+        if not press then return false
+        if key = "left"
+          m.showBookmarks = not m.showBookmarks
+          m.bookmarksList.visible = m.showBookmarks
+          if m.showBookmarks
+            m.bookmarksList.setFocus(true)
+          end if
+          return true
+        else if key = "right"
+          m.currentInput = ""
+          return true
+        else if key = "OK"
+          if m.videoPlayer.visible and m.videoPlayer.hasFocus()
+            if m.videoPlayer.paused
+              m.videoPlayer.control = "play"
+            else
+              m.videoPlayer.control = "pause"
+            end if
+          end if
+          return true
+        else if key = "up"
+          if m.showBookmarks and m.bookmarksList.hasFocus()
+            m.bookmarksList.moveUp()
+            return true
+          end if
+        else if key = "down"
+          if m.showBookmarks and m.bookmarksList.hasFocus()
+            m.bookmarksList.moveDown()
+            return true
+          end if
+        end if
+        return false
+      end function
+    ]]>
+  </script>
+</component>
