@@ -9,32 +9,26 @@
   <children>
     <Rectangle id="bgRect" width="1920" height="1080" color="0x1a1a1aff"/>
     <Rectangle id="urlBarBg" width="1920" height="80" translation="[0, 0]" color="0x2a2a2aff"/>
-    <Label id="urlLabel" text="IPTV Channel: " font="font:MediumSystemFont" color="0xffffffff" translation="[20, 15]"/>
-    <Label id="urlDisplay" text="Loading..." font="font:SmallSystemFont" color="0xccccccff" translation="[200, 15]" width="1700"/>
-    <Label id="loadingLabel" text="Loading..." font="font:SmallSystemFont" color="0xffff00ff" translation="[1800, 15]" visible="false"/>
+    <Label id="urlLabel" text="Channel: " font="font:MediumSystemFont" color="0xffffffff" translation="[20, 20]"/>
+    <Label id="urlDisplay" text="Loading..." font="font:SmallSystemFont" color="0xccccccff" translation="[150, 20]" width="1750"/>
     <Rectangle id="contentBg" width="1920" height="920" translation="[0, 80]" color="0x0a0a0aff"/>
     <Video id="videoPlayer" width="1920" height="920" translation="[0, 80]" showControls="true" visible="false"/>
-    <Label id="contentLabel" text="IPTV Browser ready. Loading channels..." font="font:MediumSystemFont" color="0xffffffff" translation="[100, 400]" width="1720"/>
+    <Label id="contentLabel" text="IPTV Browser ready..." font="font:MediumSystemFont" color="0xffffffff" translation="[100, 400]" width="1720"/>
     <ScrollingList id="channelList" width="400" height="920" translation="[0, 80]" itemComponentName="ChannelItem" visible="false"/>
     <Rectangle id="controlBarBg" width="1920" height="60" translation="[0, 1020]" color="0x2a2a2aff"/>
-    <Label id="controlsInfo" text="OK: Play/Pause | UP/DOWN: Browse Channels | LEFT: Channel List | BACK: Exit" font="font:SmallSystemFont" color="0xccccccff" translation="[20, 1030]"/>
+    <Label id="controlsInfo" text="OK: Play/Pause | UP/DOWN: Next/Prev Channel | LEFT: Channel List | BACK: Exit" font="font:SmallSystemFont" color="0xccccccff" translation="[20, 1030]"/>
   </children>
   
   <script type="text/brightscript">
     <![CDATA[
       function init()
-        m.currentUrl = m.top.findNode("currentUrl")
-        m.pageTitle = m.top.findNode("pageTitle")
-        m.isLoading = m.top.findNode("isLoading")
         m.videoPlayer = m.top.findNode("videoPlayer")
-        m.contentLabel = m.top.findNode("contentLabel")
         m.urlDisplay = m.top.findNode("urlDisplay")
-        m.loadingLabel = m.top.findNode("loadingLabel")
+        m.contentLabel = m.top.findNode("contentLabel")
         m.channelList = m.top.findNode("channelList")
         m.channels = []
         m.currentChannelIndex = 0
         m.showChannels = false
-        m.top.observeField("currentUrl", m.port)
         m.videoPlayer.observeField("state", m.port)
       end function
       
@@ -47,99 +41,35 @@
         if index >= 0 and index < m.channels.count()
           m.currentChannelIndex = index
           channel = m.channels[index]
-          m.pageTitle.value = channel.title
-          loadContent(channel.url, channel.title)
+          m.urlDisplay.text = channel.title
+          playVideo(channel.url, channel.title)
         end if
-      end function
-      
-      function onPortMessage() as void
-        msg = wait(0, m.port)
-        if type(msg) = "roSGNodeEvent"
-          field = msg.getField()
-          if field = "currentUrl"
-            loadContent(m.currentUrl.value, "")
-          else if field = "state" and msg.getNode().id = "videoPlayer"
-            handleVideoStateChange(m.videoPlayer.state)
-          end if
-        end if
-      end function
-      
-      function loadContent(url as String, title as String) as void
-        if url = "" then return
-        if not isValidUrl(url)
-          showError("Invalid URL format: " + url)
-          return
-        end if
-        m.isLoading.value = true
-        m.loadingLabel.visible = true
-        m.contentLabel.text = "Loading: " + title + "..."
-        m.urlDisplay.text = title
-        playVideo(url, title)
-      end function
-      
-      function isValidUrl(url as String) as Boolean
-        lowerUrl = lcase(url)
-        return url.left(7) = "http://" or url.left(8) = "https://" or lowerUrl.instr("m3u") > 0
       end function
       
       function playVideo(url as String, title as String) as void
         m.videoPlayer.visible = true
         m.contentLabel.visible = false
         m.channelList.visible = false
-        m.videoPlayer.content = createVideoContent(url, title)
-        m.videoPlayer.control = "play"
-        m.videoPlayer.setFocus(true)
-        m.isLoading.value = false
-        m.loadingLabel.visible = false
-      end function
-      
-      function createVideoContent(url as String, title as String) as Object
+        
         content = createObject("roSGNode", "ContentNode")
         content.url = url
-        content.title = if(title <> "", title, "Stream")
+        content.title = title
         content.streamFormat = "auto"
-        return content
+        
+        m.videoPlayer.content = content
+        m.videoPlayer.control = "play"
+        m.videoPlayer.setFocus(true)
       end function
       
       function updateChannelList() as void
-        items = []
+        parentNode = createObject("roSGNode", "ContentNode")
         for each channel in m.channels
-          item = {
-            title: channel.title,
-            description: channel.url
-          }
-          items.push(item)
-        end for
-        m.channelList.content = createListContent(items)
-      end function
-      
-      function createListContent(items as Object) as Object
-        content = createObject("roSGNode", "ContentNode")
-        for each item in items
           node = createObject("roSGNode", "ContentNode")
-          node.title = item.title
-          node.description = item.description
-          content.appendChild(node)
+          node.title = channel.title
+          node.description = channel.url
+          parentNode.appendChild(node)
         end for
-        return content
-      end function
-      
-      function handleVideoStateChange(state as String) as void
-        if state = "error"
-          showError("Video playback error - Stream may be unavailable")
-        else if state = "finished"
-          m.videoPlayer.visible = false
-          m.contentLabel.visible = true
-          m.contentLabel.text = "Channel finished. Use UP/DOWN to select another channel or LEFT to browse."
-        end if
-      end function
-      
-      function showError(message as String) as void
-        m.contentLabel.text = "Error: " + message
-        m.contentLabel.visible = true
-        m.videoPlayer.visible = false
-        m.isLoading.value = false
-        m.loadingLabel.visible = false
+        m.channelList.content = parentNode
       end function
       
       function onKeyEvent(key as String, press as Boolean) as Boolean
@@ -150,8 +80,11 @@
           m.channelList.visible = m.showChannels
           if m.showChannels and m.channels.count() > 0
             m.channelList.setFocus(true)
+          else
+            m.videoPlayer.setFocus(true)
           end if
           return true
+          
         else if key = "up"
           if m.showChannels
             if m.channelList.hasFocus()
@@ -163,6 +96,7 @@
             end if
           end if
           return true
+          
         else if key = "down"
           if m.showChannels
             if m.channelList.hasFocus()
@@ -174,13 +108,16 @@
             end if
           end if
           return true
+          
         else if key = "OK"
-          if m.showChannels and m.channelList.hasFocus()
-            playChannel(m.channelList.jumpToItem)
+          if m.channelList.visible and m.channelList.hasFocus()
+            focusedItem = m.channelList.itemFocused
+            playChannel(focusedItem)
             m.showChannels = false
             m.channelList.visible = false
+            m.videoPlayer.setFocus(true)
             return true
-          else if m.videoPlayer.visible and m.videoPlayer.hasFocus()
+          else if m.videoPlayer.visible
             if m.videoPlayer.paused
               m.videoPlayer.control = "play"
             else
@@ -189,6 +126,7 @@
             return true
           end if
         end if
+        
         return false
       end function
     ]]>
