@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component name="ChannelItem" extends="LayoutGroup">
+  <interface>
+    <field id="itemContent" type="node" onChange="itemContentChanged"/>
+  </interface>
+  
+  <children>
+    <Rectangle id="itemBg" width="400" height="100" color="0x333333ff"/>
+    <Label id="channelTitle" font="font:MediumSystemFont" color="0xffffffff" translation="[10, 10]" width="380" height="40"/>
+    <Label id="channelUrl" font="font:SmallSystemFont" color="0xccccccff" translation="[10, 50]" width="380" height="40"/>
+  </children>
+  
+  <script type="text/brightscript">
+    <![CDATA[
+      function itemContentChanged()
+        if m.top.itemContent <> invalid
+          m.top.findNode("channelTitle").text = m.top.itemContent.title
+          m.top.findNode("channelUrl").text = m.top.itemContent.description
+        end if
+      end function
+    ]]>
+  </script>
+</component>
