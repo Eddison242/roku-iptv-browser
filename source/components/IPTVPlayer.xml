@@ -1,43 +1,149 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<component name="IPTVPlayer">
-    <script>
-        <![CDATA[
-            // Functionality for HLS and M3U playlist parsing
-            function parseM3U(playlist) {
-                const lines = playlist.split('\n');
-                const streams = [];
-                let currentStream = {};
-
-                for (const line of lines) {
-                    if (line.startsWith('#EXTINF:')) {
-                        if (currentStream.url) {
-                            streams.push(currentStream);
-                        }
-                        currentStream = { 
-                            title: line.split(',')[1].trim(),
-                        };
-                    } else if (line.trim() && !line.startsWith('#')) {
-                        currentStream.url = line.trim();
-                    }
-                }
-                if (currentStream.url) {
-                    streams.push(currentStream);
-                }
-                return streams;
-            }
-
-            // HLS playback functionality
-            function playStream(url) {
-                // Implement HLS playback logic (using a library or native implementations)
-                console.log('Playing stream: ' + url);
-            }
-
-            // Example usage
-            const m3uData = `#EXTM3U\n#EXTINF:0,Sample Stream\nhttp://example.com/sample.m3u8`;
-            const parsedStreams = parseM3U(m3uData);
-            parsedStreams.forEach(stream => {
-                playStream(stream.url);
-            });
-        ]]>
-    </script>
+<component name="IPTVPlayer" extends="Group">
+  <interface>
+    <field id="visible" type="bool" value="true"/>
+  </interface>
+  
+  <children>
+    <Rectangle id="bgRect" width="1920" height="1080" color="0x1a1a1aff"/>
+    <Rectangle id="headerBg" width="1920" height="80" translation="[0, 0]" color="0x2a2a2aff"/>
+    <Label id="headerLabel" text="IPTV Channel: Loading..." font="font:MediumSystemFont" color="0xffffffff" translation="[20, 20]"/>
+    <Rectangle id="contentBg" width="1920" height="920" translation="[0, 80]" color="0x0a0a0aff"/>
+    <Video id="videoPlayer" width="1920" height="920" translation="[0, 80]" showControls="true" visible="false"/>
+    <Label id="statusLabel" text="Loading channels..." font="font:MediumSystemFont" color="0xffffffff" translation="[100, 400]" width="1720" height="300"/>
+    <ScrollingList id="channelList" width="400" height="920" translation="[0, 80]" itemComponentName="ChannelItem" visible="false"/>
+    <Rectangle id="footerBg" width="1920" height="60" translation="[0, 1020]" color="0x2a2a2aff"/>
+    <Label id="controlsLabel" text="OK: Play | UP/DOWN: Navigate | LEFT: Channel List | BACK: Exit" font="font:SmallSystemFont" color="0xccccccff" translation="[20, 1030]"/>
+  </children>
+  
+  <script type="text/brightscript">
+    <![CDATA[
+      function init()
+        m.headerLabel = m.top.findNode("headerLabel")
+        m.statusLabel = m.top.findNode("statusLabel")
+        m.videoPlayer = m.top.findNode("videoPlayer")
+        m.channelList = m.top.findNode("channelList")
+        m.controlsLabel = m.top.findNode("controlsLabel")
+        m.channels = []
+        m.currentChannelIndex = 0
+        m.showChannels = false
+        m.videoPlayer.observeField("state", m.port)
+      end function
+      
+      function loadChannels(channels as Object) as void
+        m.channels = channels
+        updateChannelList()
+        m.statusLabel.text = "Loaded " + stri(channels.count()) + " channels. Use UP/DOWN to select or LEFT to browse."
+      end function
+      
+      function playChannel(index as Integer) as void
+        if index >= 0 and index < m.channels.count()
+          m.currentChannelIndex = index
+          channel = m.channels[index]
+          m.headerLabel.text = "IPTV Channel: " + channel.title
+          playVideo(channel.url, channel.title)
+        end if
+      end function
+      
+      function playVideo(url as String, title as String) as void
+        m.videoPlayer.visible = true
+        m.statusLabel.visible = false
+        m.channelList.visible = false
+        
+        content = createObject("roSGNode", "ContentNode")
+        content.url = url
+        content.title = title
+        content.streamFormat = "auto"
+        
+        m.videoPlayer.content = content
+        m.videoPlayer.control = "play"
+        m.videoPlayer.setFocus(true)
+      end function
+      
+      function updateChannelList() as void
+        items = []
+        for each channel in m.channels
+          item = createObject("roSGNode", "ContentNode")
+          item.title = channel.title
+          item.description = channel.url
+          items.push(item)
+        end for
+        
+        parentNode = createObject("roSGNode", "ContentNode")
+        for each item in items
+          parentNode.appendChild(item)
+        end for
+        
+        m.channelList.content = parentNode
+      end function
+      
+      function showError(message as String) as void
+        m.videoPlayer.visible = false
+        m.statusLabel.visible = true
+        m.channelList.visible = false
+        m.statusLabel.text = "Error: " + message
+      end function
+      
+      function onKeyEvent(key as String, press as Boolean) as Boolean
+        if not press then return false
+        
+        if key = "left"
+          m.showChannels = not m.showChannels
+          m.channelList.visible = m.showChannels
+          if m.showChannels and m.channels.count() > 0
+            m.channelList.setFocus(true)
+          else
+            m.videoPlayer.setFocus(true)
+          end if
+          return true
+          
+        else if key = "up"
+          if m.showChannels
+            if m.channelList.hasFocus()
+              m.channelList.moveUp()
+            end if
+          else
+            if m.currentChannelIndex > 0
+              playChannel(m.currentChannelIndex - 1)
+            end if
+          end if
+          return true
+          
+        else if key = "down"
+          if m.showChannels
+            if m.channelList.hasFocus()
+              m.channelList.moveDown()
+            end if
+          else
+            if m.currentChannelIndex < m.channels.count() - 1
+              playChannel(m.currentChannelIndex + 1)
+            end if
+          end if
+          return true
+          
+        else if key = "OK"
+          if m.channelList.visible and m.channelList.hasFocus()
+            ' Get selected item
+            focusedChild = m.channelList.content.getChild(m.channelList.itemFocused)
+            if focusedChild <> invalid
+              playChannel(m.channelList.itemFocused)
+              m.showChannels = false
+              m.channelList.visible = false
+              m.videoPlayer.setFocus(true)
+            end if
+            return true
+          else if m.videoPlayer.visible
+            if m.videoPlayer.paused
+              m.videoPlayer.control = "play"
+            else
+              m.videoPlayer.control = "pause"
+            end if
+            return true
+          end if
+        end if
+        
+        return false
+      end function
+    ]]>
+  </script>
 </component>
