@@ -1,134 +1,87 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component name="MainScene" extends="Scene">
   <interface>
-    <field id="currentMode" type="string" value="menu" alwaysNotify="true"/>
+    <field id="visible" type="bool" value="true"/>
   </interface>
   
   <children>
-    <!-- Main Menu -->
-    <Rectangle id="backgroundRect" width="1920" height="1080" color="0x1a1a1aff"/>
-    
-    <!-- Menu Buttons -->
-    <Group id="menuGroup" translation="[100, 100]">
-      <Label id="titleLabel" text="IPTV Player & Web Browser" 
-             font="font:LargeSystemFont" color="0xffffffff"/>
-      
-      <Group id="buttonGroup" translation="[0, 100]">
-        <Button id="iptvButton" text="IPTV Player" 
-                width="400" height="80" translation="[0, 0]"/>
-        <Button id="browserButton" text="Web Browser" 
-                width="400" height="80" translation="[0, 100]"/>
-        <Button id="settingsButton" text="Settings" 
-                width="400" height="80" translation="[0, 200]"/>
-      </Group>
-    </Group>
-    
-    <!-- IPTV Player Component -->
-    <Group id="iptvContainer" visible="false">
-      <IPTVPlayer id="iptvPlayer" width="1920" height="1080"/>
-    </Group>
-    
-    <!-- Web Browser Component -->
-    <Group id="browserContainer" visible="false">
-      <WebBrowser id="webBrowser" width="1920" height="1080"/>
-    </Group>
-    
-    <!-- Settings Component -->
-    <Group id="settingsContainer" visible="false">
-      <SettingsPanel id="settingsPanel" width="1920" height="1080"/>
-    </Group>
+    <WebBrowser id="webBrowser" width="1920" height="1080"/>
   </children>
   
   <script type="text/brightscript">
     <![CDATA[
       function init()
-        m.currentMode = m.top.findNode("currentMode")
-        m.iptvPlayer = m.top.findNode("iptvPlayer")
         m.webBrowser = m.top.findNode("webBrowser")
-        m.settingsPanel = m.top.findNode("settingsPanel")
+        m.m3uUrl = "http://ns106911.ip-51-81-106.us:25461/get.php?username=twainbrooks34@gmail.com&password=jetstream1&type=m3u_plus"
         
-        m.menuGroup = m.top.findNode("menuGroup")
-        m.iptvContainer = m.top.findNode("iptvContainer")
-        m.browserContainer = m.top.findNode("browserContainer")
-        m.settingsContainer = m.top.findNode("settingsContainer")
+        ' Load M3U playlist on startup
+        loadM3uPlaylist(m.m3uUrl)
+      end function
+      
+      function loadM3uPlaylist(url as String) as void
+        http = createObject("roUrlTransfer")
+        http.setUrl(url)
+        http.setCertificatesFile("common:/certs/ca-bundle.crt")
+        http.setConnectTimeout(15)
+        http.setReadTimeout(30)
+        http.addHeader("User-Agent", "Roku/9.0")
         
-        m.iptvButton = m.top.findNode("iptvButton")
-        m.browserButton = m.top.findNode("browserButton")
-        m.settingsButton = m.top.findNode("settingsButton")
+        response = http.getToString()
+        if response <> invalid and response <> ""
+          parseAndPlayM3u(response)
+        else
+          showError("Failed to load M3U playlist")
+        end if
+      end function
+      
+      function parseAndPlayM3u(m3uContent as String) as void
+        lines = m3uContent.split(chr(10))
+        channels = []
+        currentChannel = invalid
         
-        m.iptvButton.observeField("buttonSelected", m.port)
-        m.browserButton.observeField("buttonSelected", m.port)
-        m.settingsButton.observeField("buttonSelected", m.port)
+        for each line in lines
+          line = line.trim()
+          if line <> ""
+            if line.left(8) = "#EXTINF:"
+              ' Parse channel info
+              currentChannel = {
+                title: extractChannelName(line),
+                url: ""
+              }
+            else if line.left(1) <> "#" and currentChannel <> invalid
+              ' This is the URL for the current channel
+              currentChannel.url = line
+              channels.push(currentChannel)
+              currentChannel = invalid
+            end if
+          end if
+        end for
         
-        m.top.observeField("currentMode", m.port)
-        
-        m.currentMode.value = "menu"
+        if channels.count() > 0
+          m.webBrowser.loadChannels(channels)
+          m.webBrowser.playChannel(0)
+        else
+          showError("No channels found in M3U playlist")
+        end if
+      end function
+      
+      function extractChannelName(extinf as String) as String
+        ' Parse #EXTINF:-1, Channel Name
+        comma = extinf.instr(",")
+        if comma > 0
+          return extinf.mid(comma + 1, extinf.len() - comma - 1).trim()
+        else
+          return "Unknown Channel"
+        end if
+      end function
+      
+      function showError(message as String) as void
+        print "Error: " + message
       end function
       
       function onKeyEvent(key as String, press as Boolean) as Boolean
         if not press then return false
-        
-        if key = "back"
-          if m.currentMode.value <> "menu"
-            showMenu()
-            return true
-          end if
-        end if
-        
-        return false
-      end function
-      
-      function showMenu()
-        m.menuGroup.visible = true
-        m.iptvContainer.visible = false
-        m.browserContainer.visible = false
-        m.settingsContainer.visible = false
-        m.currentMode.value = "menu"
-      end function
-      
-      function showIPTV()
-        m.menuGroup.visible = false
-        m.iptvContainer.visible = true
-        m.browserContainer.visible = false
-        m.settingsContainer.visible = false
-        m.currentMode.value = "iptv"
-        m.iptvPlayer.setFocus(true)
-      end function
-      
-      function showBrowser()
-        m.menuGroup.visible = false
-        m.iptvContainer.visible = false
-        m.browserContainer.visible = true
-        m.settingsContainer.visible = false
-        m.currentMode.value = "browser"
-        m.webBrowser.setFocus(true)
-      end function
-      
-      function showSettings()
-        m.menuGroup.visible = false
-        m.iptvContainer.visible = false
-        m.browserContainer.visible = false
-        m.settingsContainer.visible = true
-        m.currentMode.value = "settings"
-      end function
-      
-      function onPortMessage() as void
-        msg = wait(0, m.port)
-        
-        if type(msg) = "roSGNodeEvent"
-          field = msg.getField()
-          
-          if field = "buttonSelected"
-            button = msg.getNode()
-            if button.id = "iptvButton"
-              showIPTV()
-            else if button.id = "browserButton"
-              showBrowser()
-            else if button.id = "settingsButton"
-              showSettings()
-            end if
-          end if
-        end if
+        return m.webBrowser.onKeyEvent(key, press)
       end function
     ]]>
   </script>
