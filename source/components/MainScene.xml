@@ -5,13 +5,14 @@
   </interface>
   
   <children>
-    <WebBrowser id="webBrowser" width="1920" height="1080"/>
+    <IPTVPlayer id="iptvPlayer" width="1920" height="1080"/>
   </children>
   
   <script type="text/brightscript">
     <![CDATA[
       function init()
-        m.webBrowser = m.top.findNode("webBrowser")
+        m.iptvPlayer = m.top.findNode("iptvPlayer")
+        ' M3U URL with credentials
         m.m3uUrl = "http://ns106911.ip-51-81-106.us:25461/get.php?username=twainbrooks34@gmail.com&password=jetstream1&type=m3u_plus"
         
         ' Load M3U playlist on startup
@@ -19,6 +20,7 @@
       end function
       
       function loadM3uPlaylist(url as String) as void
+        print "Loading M3U from: " + url
         http = createObject("roUrlTransfer")
         http.setUrl(url)
         http.setCertificatesFile("common:/certs/ca-bundle.crt")
@@ -28,9 +30,11 @@
         
         response = http.getToString()
         if response <> invalid and response <> ""
+          print "M3U loaded successfully, parsing..."
           parseAndPlayM3u(response)
         else
-          showError("Failed to load M3U playlist")
+          print "Failed to load M3U playlist"
+          m.iptvPlayer.showError("Failed to load M3U playlist")
         end if
       end function
       
@@ -57,11 +61,14 @@
           end if
         end for
         
+        print "Parsed " + stri(channels.count()) + " channels"
+        
         if channels.count() > 0
-          m.webBrowser.loadChannels(channels)
-          m.webBrowser.playChannel(0)
+          m.iptvPlayer.loadChannels(channels)
+          m.iptvPlayer.playChannel(0)
         else
-          showError("No channels found in M3U playlist")
+          print "No channels found in M3U"
+          m.iptvPlayer.showError("No channels found in M3U playlist")
         end if
       end function
       
@@ -69,19 +76,16 @@
         ' Parse #EXTINF:-1, Channel Name
         comma = extinf.instr(",")
         if comma > 0
-          return extinf.mid(comma + 1, extinf.len() - comma - 1).trim()
+          name = extinf.mid(comma + 1, extinf.len() - comma - 1).trim()
+          return if(name <> "", name, "Unknown Channel")
         else
           return "Unknown Channel"
         end if
       end function
       
-      function showError(message as String) as void
-        print "Error: " + message
-      end function
-      
       function onKeyEvent(key as String, press as Boolean) as Boolean
         if not press then return false
-        return m.webBrowser.onKeyEvent(key, press)
+        return m.iptvPlayer.onKeyEvent(key, press)
       end function
     ]]>
   </script>
